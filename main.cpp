@@ -110,29 +110,45 @@ void sync_selected_commands(const std::vector<std::string>& commands) {
 
 int main(int argc, char **argv)
 {
+    const bool gui_only = (argc == 2 && std::string(argv[1]) == "--gui-only");
+
     if (argc != 2)
     {
         std::cerr << "Usage: " << argv[0] << " /dev/input/eventX\n";
+        std::cerr << "       " << argv[0] << " --gui-only\n";
         return 1;
     }
 
-    const char *device_path = argv[1];
-    struct libinput *li = libinput_path_create_context(&interface, nullptr);
-    if (!li)
+    struct libinput *li = nullptr;
+    int fd = -1;
+    struct pollfd fds = {};
+
+    if (!gui_only)
     {
-        std::cerr << "Failed to create libinput context\n";
-        return 1;
-    }
+        const char *device_path = argv[1];
+        li = libinput_path_create_context(&interface, nullptr);
+        if (!li)
+        {
+            std::cerr << "Failed to create libinput context\n";
+            return 1;
+        }
 
-    struct libinput_device *device = libinput_path_add_device(li, device_path);
-    if (!device)
+        struct libinput_device *device = libinput_path_add_device(li, device_path);
+        if (!device)
+        {
+            std::cerr << "Failed to add device: " << device_path << "\n";
+            libinput_unref(li);
+            return 1;
+        }
+
+        std::cout << "Listening for events on: " << device_path << "\n";
+        fd = libinput_get_fd(li);
+        fds = {fd, POLLIN, 0};
+    }
+    else
     {
-        std::cerr << "Failed to add device: " << device_path << "\n";
-        libinput_unref(li);
-        return 1;
+        std::cout << "GUI-only mode: gesture detection disabled (no touchpad device).\n";
     }
-
-    std::cout << "Listening for events on: " << device_path << "\n";
 
     // Initialize GLFW
     if (!glfwInit())
@@ -170,13 +186,10 @@ int main(int argc, char **argv)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    int fd = libinput_get_fd(li);
-    struct pollfd fds = {fd, POLLIN, 0};
-
     while (!glfwWindowShouldClose(window))
     {
         // Poll for libinput events without blocking the UI thread
-        if (poll(&fds, 1, 0) > 0)
+        if (li && poll(&fds, 1, 0) > 0)
         {
             if (libinput_dispatch(li) != 0)
             {
@@ -465,6 +478,7 @@ int main(int argc, char **argv)
     glfwDestroyWindow(window);
     glfwTerminate();
 
-    libinput_unref(li);
+    if (li)
+        libinput_unref(li);
     return 0;
 }
