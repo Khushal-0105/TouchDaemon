@@ -54,7 +54,7 @@ chmod +x setup.sh build.sh
 ### 1. Clone and enter the repo
 
 ```bash
-git clone https://github.com/S0r4-0/TouchDaemon
+git clone https://github.com/Khushal-0105/TouchDaemon
 cd TouchDaemon
 ```
 
